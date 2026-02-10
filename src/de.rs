@@ -15,29 +15,35 @@ impl<'de> Deserializer<'de> {
     Deserializer { input }
   }
 
-  fn read_bytes(&mut self, n: usize) -> &'de [u8] {
+  fn read_bytes(&mut self, n: usize) -> Result<&'de [u8]> {
+    if self.input.len() < n {
+      return Err(Error::Eof);
+    }
     let (head, tail) = self.input.split_at(n);
     self.input = tail;
-    head
+    Ok(head)
   }
 
-  fn read_u8(&mut self) -> u8 {
+  fn read_u8(&mut self) -> Result<u8> {
+    if self.input.is_empty() {
+      return Err(Error::Eof);
+    }
     let b = self.input[0];
     self.input = &self.input[1..];
-    b
+    Ok(b)
   }
 
-  fn read_u32(&mut self) -> u32 {
-    let bytes = self.read_bytes(4);
-    u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+  fn read_u32(&mut self) -> Result<u32> {
+    let bytes = self.read_bytes(4)?;
+    Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
   }
 
   fn deserialize_with_sentinel(&mut self, sentinel: u8) -> Result<Vec<u8>> {
     let mut bytes: Vec<u8> = Vec::new();
     loop {
-      let byte = self.read_u8();
+      let byte = self.read_u8()?;
       if byte == sentinel {
-        let next_byte = self.read_u8();
+        let next_byte = self.read_u8()?;
         if next_byte == 0x00 {
           break;
         } else if next_byte == 0x01 {
@@ -77,7 +83,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    match self.read_u8() {
+    match self.read_u8()? {
       0 => visitor.visit_bool(false),
       1 => visitor.visit_bool(true),
       _ => Err(Error::Message("Invalid boolean value".to_string())),
@@ -88,7 +94,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let value = self.read_u8().wrapping_sub(128);
+    let value = self.read_u8()?.wrapping_sub(128);
     visitor.visit_i8(value as i8)
   }
 
@@ -96,7 +102,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(2);
+    let bytes = self.read_bytes(2)?;
     let val = u16::from_be_bytes([bytes[0], bytes[1]]).wrapping_sub(32768);
     visitor.visit_i16(val as i16)
   }
@@ -105,7 +111,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let val = self.read_u32().wrapping_sub(2147483648);
+    let val = self.read_u32()?.wrapping_sub(2147483648);
     visitor.visit_i32(val as i32)
   }
 
@@ -113,7 +119,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(8);
+    let bytes = self.read_bytes(8)?;
     let val = u64::from_be_bytes([
       bytes[0], bytes[1], bytes[2], bytes[3],
       bytes[4], bytes[5], bytes[6], bytes[7],
@@ -125,7 +131,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(16);
+    let bytes = self.read_bytes(16)?;
     let val = u128::from_be_bytes([
       bytes[0], bytes[1], bytes[2], bytes[3],
       bytes[4], bytes[5], bytes[6], bytes[7],
@@ -139,14 +145,14 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    visitor.visit_u8(self.read_u8())
+    visitor.visit_u8(self.read_u8()?)
   }
 
   fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(2);
+    let bytes = self.read_bytes(2)?;
     let val = u16::from_be_bytes([bytes[0], bytes[1]]);
     visitor.visit_u16(val)
   }
@@ -155,7 +161,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let val = self.read_u32();
+    let val = self.read_u32()?;
     visitor.visit_u32(val)
   }
 
@@ -163,7 +169,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(8);
+    let bytes = self.read_bytes(8)?;
     let val = u64::from_be_bytes([
       bytes[0], bytes[1], bytes[2], bytes[3],
       bytes[4], bytes[5], bytes[6], bytes[7],
@@ -175,7 +181,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(16);
+    let bytes = self.read_bytes(16)?;
     let val = u128::from_be_bytes([
       bytes[0], bytes[1], bytes[2], bytes[3],
       bytes[4], bytes[5], bytes[6], bytes[7],
@@ -189,7 +195,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let mut v = self.read_u32();
+    let mut v = self.read_u32()?;
     const SIGN_MASK: u32 = 1 << 31;
     if (v & SIGN_MASK) == 0 {
       v = !v;
@@ -203,7 +209,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(8);
+    let bytes = self.read_bytes(8)?;
     let mut v = u64::from_be_bytes([
       bytes[0], bytes[1], bytes[2], bytes[3],
       bytes[4], bytes[5], bytes[6], bytes[7],
@@ -221,7 +227,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let code_point = self.read_u32();
+    let code_point = self.read_u32()?;
     match std::char::from_u32(code_point) {
       Some(c) => visitor.visit_char(c),
       None => Err(Error::Message("Invalid char code point".to_string())),
@@ -267,7 +273,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    match self.read_u8() {
+    match self.read_u8()? {
       0 => visitor.visit_none(),
       1 => visitor.visit_some(self),
       _ => Err(Error::Message("Invalid option encoding".to_string())),
@@ -393,7 +399,7 @@ impl<'de, 'a> SeqAccess<'de> for SeqAccessor<'a, 'de> {
   where
     T: DeserializeSeed<'de>,
   {
-    match self.deserializer.read_u8() {
+    match self.deserializer.read_u8()? {
       0x00 => Ok(None),
       0x01 => {
         let value = seed.deserialize(&mut *self.deserializer)?;
@@ -438,7 +444,7 @@ impl<'de, 'a> MapAccess<'de> for MapAccessor<'a, 'de> {
   where
     K: DeserializeSeed<'de>,
   {
-    match self.deserializer.read_u8() {
+    match self.deserializer.read_u8()? {
       0x00 => Ok(None),
       0x01 => {
         let key = seed.deserialize(&mut *self.deserializer)?;
@@ -469,7 +475,7 @@ impl<'de, 'a> EnumAccess<'de> for EnumAccessor<'a, 'de> {
   where
     V: DeserializeSeed<'de>,
   {
-    let variant_index = self.deserializer.read_u32();
+    let variant_index = self.deserializer.read_u32()?;
     let val = seed.deserialize(variant_index.into_deserializer())?;
     Ok((val, self))
   }
