@@ -60,18 +60,6 @@ mod prop_tests {
   roundtripping_test!(prop_map, std::collections::BTreeMap<String, i64>);
   roundtripping_test!(prop_struct, Struct);
 
-  /*
-  // Test round-tripping encoding and decoding
-  proptest! {
-    #[test]
-    fn prop_encode_decode(data in any::<E>()) {
-      let new_data = lexcode::to_bytes(&data).and_then(|bytes| {
-        println!("Encoded bytes {:?}", bytes);
-        lexcode::from_bytes::<E>(bytes.as_ref())})?;
-      prop_assert_eq!(data, new_data);
-    }
-  }
-*/
   macro_rules! ordpreserving_test {
       ($name:ident, $ty:ty, $eq:expr) => {
           proptest! {
