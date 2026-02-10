@@ -28,7 +28,7 @@ mod prop_tests {
           proptest! {
               #[test]
               fn $name(data in any::<$ty>()) {
-                  let new_data = lexcode::to_bytes(&data).and_then(|bytes|
+                  let new_data = lexcode::to_bytes(&data).and_then(|ref bytes|
                       lexcode::from_bytes::<$ty>(bytes.as_ref()))?;
                   prop_assert_eq!(data, new_data);
               }
@@ -55,7 +55,7 @@ mod prop_tests {
   roundtripping_test!(prop_newtype_struct, NewtypeStruct);
   roundtripping_test!(prop_tuple_i64_i64, (i64, i64));
   roundtripping_test!(prop_tuple_struct_i64_i64, TupleStructI64I64);
-//  roundtripping_test!(prop_enum_e, E); // Fails with "unit variant, expected tuple variant" V(0,0)
+  roundtripping_test!(prop_enum_e, E);
   roundtripping_test!(prop_vec_i64, Vec<i64>);
   roundtripping_test!(prop_map, std::collections::BTreeMap<String, i64>);
   roundtripping_test!(prop_struct, Struct);
