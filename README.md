@@ -90,6 +90,10 @@ The test suite uses [proptest](https://crates.io/crates/proptest) for property-b
 cargo test
 ```
 
+## Disclaimer
+
+This library is in no way associated with Lex Fridman. This library cannot conduct a 4-hour podcast interview with your data structures.
+
 ## License
 
 Licensed under the [MIT License](LICENSE).
