@@ -90,6 +90,10 @@ The test suite uses [proptest](https://crates.io/crates/proptest) for property-b
 cargo test
 ```
 
+## Limitations
+
+- **`deserialize_any` is not supported.** Since lexcode is a non-self-describing binary format, the deserializer must know the expected type at compile time. This means dynamically-typed values like `serde_json::Value` cannot be deserialized from lexcode.
+
 ## Disclaimer
 
 This library is in no way associated with Lex Fridman. This library cannot conduct a 4-hour podcast interview with your data structures.
