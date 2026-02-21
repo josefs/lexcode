@@ -5,6 +5,7 @@ use serde::de::{
 };
 
 use crate::error::{Error, Result};
+use crate::varint;
 
 pub struct Deserializer<'de> {
   input: &'de [u8],
@@ -33,9 +34,23 @@ impl<'de> Deserializer<'de> {
     Ok(b)
   }
 
-  fn read_u32(&mut self) -> Result<u32> {
+  fn read_u32_varint(&mut self) -> Result<u32> {
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    u32::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in u32".into()))
+  }
+
+  fn read_raw_u32(&mut self) -> Result<u32> {
     let bytes = self.read_bytes(4)?;
     Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+  }
+
+  fn read_raw_u64(&mut self) -> Result<u64> {
+    let bytes = self.read_bytes(8)?;
+    Ok(u64::from_be_bytes([
+      bytes[0], bytes[1], bytes[2], bytes[3],
+      bytes[4], bytes[5], bytes[6], bytes[7],
+    ]))
   }
 
   fn deserialize_with_sentinel(&mut self, sentinel: u8) -> Result<Vec<u8>> {
@@ -94,108 +109,105 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let value = self.read_u8()?.wrapping_sub(128);
-    visitor.visit_i8(value as i8)
+    let (v, consumed) = varint::decode_sint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = i8::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in i8".into()))?;
+    visitor.visit_i8(v)
   }
 
   fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(2)?;
-    let val = u16::from_be_bytes([bytes[0], bytes[1]]).wrapping_sub(32768);
-    visitor.visit_i16(val as i16)
+    let (v, consumed) = varint::decode_sint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = i16::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in i16".into()))?;
+    visitor.visit_i16(v)
   }
 
   fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let val = self.read_u32()?.wrapping_sub(2147483648);
-    visitor.visit_i32(val as i32)
+    let (v, consumed) = varint::decode_sint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = i32::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in i32".into()))?;
+    visitor.visit_i32(v)
   }
 
   fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(8)?;
-    let val = u64::from_be_bytes([
-      bytes[0], bytes[1], bytes[2], bytes[3],
-      bytes[4], bytes[5], bytes[6], bytes[7],
-    ]).wrapping_sub(9223372036854775808);
-    visitor.visit_i64(val as i64)
+    let (v, consumed) = varint::decode_sint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = i64::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in i64".into()))?;
+    visitor.visit_i64(v)
   }
 
   fn deserialize_i128<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(16)?;
-    let val = u128::from_be_bytes([
-      bytes[0], bytes[1], bytes[2], bytes[3],
-      bytes[4], bytes[5], bytes[6], bytes[7],
-      bytes[8], bytes[9], bytes[10], bytes[11],
-      bytes[12], bytes[13], bytes[14], bytes[15],
-    ]).wrapping_sub(170141183460469231731687303715884105728);
-    visitor.visit_i128(val as i128)
+    let (v, consumed) = varint::decode_sint(self.input)?;
+    self.input = &self.input[consumed..];
+    visitor.visit_i128(v)
   }
 
   fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    visitor.visit_u8(self.read_u8()?)
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = u8::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in u8".into()))?;
+    visitor.visit_u8(v)
   }
 
   fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(2)?;
-    let val = u16::from_be_bytes([bytes[0], bytes[1]]);
-    visitor.visit_u16(val)
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = u16::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in u16".into()))?;
+    visitor.visit_u16(v)
   }
 
   fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let val = self.read_u32()?;
-    visitor.visit_u32(val)
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = u32::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in u32".into()))?;
+    visitor.visit_u32(v)
   }
 
   fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(8)?;
-    let val = u64::from_be_bytes([
-      bytes[0], bytes[1], bytes[2], bytes[3],
-      bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
-    visitor.visit_u64(val)
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    let v = u64::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in u64".into()))?;
+    visitor.visit_u64(v)
   }
 
   fn deserialize_u128<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(16)?;
-    let val = u128::from_be_bytes([
-      bytes[0], bytes[1], bytes[2], bytes[3],
-      bytes[4], bytes[5], bytes[6], bytes[7],
-      bytes[8], bytes[9], bytes[10], bytes[11],
-      bytes[12], bytes[13], bytes[14], bytes[15],
-    ]);
-    visitor.visit_u128(val)
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    visitor.visit_u128(v)
   }
 
   fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    let mut v = self.read_u32()?;
+    let mut v = self.read_raw_u32()?;
     const SIGN_MASK: u32 = 1 << 31;
     if (v & SIGN_MASK) == 0 {
       v = !v;
@@ -209,11 +221,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let bytes = self.read_bytes(8)?;
-    let mut v = u64::from_be_bytes([
-      bytes[0], bytes[1], bytes[2], bytes[3],
-      bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
+    let mut v = self.read_raw_u64()?;
     const SIGN_MASK: u64 = 1 << 63;
     if (v & SIGN_MASK) == 0 {
       v = !v;
@@ -227,7 +235,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
-    let code_point = self.read_u32()?;
+    let (v, consumed) = varint::decode_uint(self.input)?;
+    self.input = &self.input[consumed..];
+    let code_point = v as u32;
     match std::char::from_u32(code_point) {
       Some(c) => visitor.visit_char(c),
       None => Err(Error::Message("Invalid char code point".to_string())),
@@ -475,7 +485,7 @@ impl<'de, 'a> EnumAccess<'de> for EnumAccessor<'a, 'de> {
   where
     V: DeserializeSeed<'de>,
   {
-    let variant_index = self.deserializer.read_u32()?;
+    let variant_index = self.deserializer.read_u32_varint()?;
     let val = seed.deserialize(variant_index.into_deserializer())?;
     Ok((val, self))
   }

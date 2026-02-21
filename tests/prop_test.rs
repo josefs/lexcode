@@ -86,10 +86,12 @@ mod prop_tests {
   ordpreserving_test!(prop_ord_i16, i16, true);
   ordpreserving_test!(prop_ord_i32, i32, true);
   ordpreserving_test!(prop_ord_i64, i64, true);
+  ordpreserving_test!(prop_ord_i128, i128, true);
   ordpreserving_test!(prop_ord_u8,  u8, true);
   ordpreserving_test!(prop_ord_u16, u16, true);
   ordpreserving_test!(prop_ord_u32, u32, true);
   ordpreserving_test!(prop_ord_u64, u64, true);
+  ordpreserving_test!(prop_ord_u128, u128, true);
   ordpreserving_test!(prop_ord_f32, f32, false);
   ordpreserving_test!(prop_ord_f64, f64, false);
   ordpreserving_test!(prop_ord_char, char, true);
@@ -104,4 +106,31 @@ mod prop_tests {
   ordpreserving_test!(prop_ord_tuple_i64_i64, (i64, i64), true);
   ordpreserving_test!(prop_ord_vec_i64, Vec<i64>, true);
   ordpreserving_test!(prop_ord_vec_string, Vec<String>, true);
+
+  macro_rules! overflow_test {
+      ($name:ident, $ser_ty:ty, $de_ty:ty, $val:expr) => {
+          #[test]
+          fn $name() {
+              let bytes = lexcode::to_bytes(&($val as $ser_ty)).unwrap();
+              let result = lexcode::from_bytes::<$de_ty>(&bytes);
+              assert!(result.is_err(), "expected overflow error deserializing {} as {}",
+                  stringify!($ser_ty), stringify!($de_ty));
+          }
+      };
+  }
+
+  // Unsigned overflow
+  overflow_test!(overflow_u16_as_u8, u16, u8, 256u16);
+  overflow_test!(overflow_u32_as_u8, u32, u8, 1000u32);
+  overflow_test!(overflow_u32_as_u16, u32, u16, 70000u32);
+  overflow_test!(overflow_u64_as_u32, u64, u32, u32::MAX as u64 + 1);
+  overflow_test!(overflow_u128_as_u64, u128, u64, u64::MAX as u128 + 1);
+
+  // Signed overflow
+  overflow_test!(overflow_i16_as_i8_pos, i16, i8, 128i16);
+  overflow_test!(overflow_i16_as_i8_neg, i16, i8, -129i16);
+  overflow_test!(overflow_i32_as_i16_pos, i32, i16, 32768i32);
+  overflow_test!(overflow_i32_as_i16_neg, i32, i16, -32769i32);
+  overflow_test!(overflow_i64_as_i32, i64, i32, i32::MAX as i64 + 1);
+  overflow_test!(overflow_i128_as_i64, i128, i64, i64::MAX as i128 + 1);
 }

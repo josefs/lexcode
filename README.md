@@ -51,24 +51,52 @@ assert!(b < c); // category 1 < category 2
 | Type | Encoding |
 |---|---|
 | `bool` | 1 byte (`0x00` / `0x01`) |
-| `u8`, `u16`, `u32`, `u64`, `u128` | Big-endian bytes |
-| `i8`, `i16`, `i32`, `i64`, `i128` | Offset binary (flip sign bit) |
-| `f32`, `f64` | IEEE 754 with sign-aware bit flipping |
-| `char` | Big-endian `u32` code point |
+| `u8`, `u16`, `u32`, `u64`, `u128` | Variable-length unsigned varint |
+| `i8`, `i16`, `i32`, `i64`, `i128` | Variable-length signed varint (sign bit + magnitude) |
+| `f32`, `f64` | IEEE 754 with sign-aware bit flipping (fixed-width) |
+| `char` | Variable-length unsigned varint of code point |
 | `String` / `&str` | Sentinel-escaped with `0x00` terminator |
 | `&[u8]` | Sentinel-escaped with `0x7F` terminator |
 | `Option<T>` | `0x00` for `None`, `0x01` + value for `Some` |
 | `Vec<T>`, sequences | `0x01` + element per entry, `0x00` terminator |
 | Maps | `0x01` + key + value per entry, `0x00` terminator |
 | Tuples, structs | Fields concatenated in order (fixed-length) |
-| Enums | `u32` variant index + variant data |
+| Enums | Varint variant index + variant data |
 | `()`, unit structs | Zero bytes |
 
 ## Encoding Details
 
 ### Integers
 
-Unsigned integers are stored in big-endian byte order. Signed integers are converted to unsigned via offset binary (`value.wrapping_add(2^(bits-1))`) then stored big-endian. This ensures negative values sort before positive values.
+Integers use a variable-length encoding that preserves lexicographic ordering while compressing small values into fewer bytes.
+
+#### Unsigned integers
+
+The number of leading 1-bits in the first byte (and optionally a second header byte for large values) determines how many additional data bytes follow. A 0-bit terminates the unary prefix. The remaining header bits plus the extra bytes store the value in big-endian.
+
+| First byte pattern | Total bytes | Data bits | Value range |
+|---|---|---|---|
+| `0xxxxxxx` | 1 | 7 | 0 – 127 |
+| `10xxxxxx` + 1 byte | 2 | 14 | 128 – 16,511 |
+| `110xxxxx` + 2 bytes | 3 | 21 | 16,512 – 2,113,663 |
+| `1110xxxx` + 3 bytes | 4 | 28 | … |
+| `11110xxx` + 4 bytes | 5 | 35 | |
+| `111110xx` + 5 bytes | 6 | 42 | |
+| `1111110x` + 6 bytes | 7 | 49 | |
+| `11111110` + 7 bytes | 8 | 56 | |
+
+When the first byte is `0xFF`, a second header byte extends the scheme in the same way, supporting up to 18 total bytes for the full `u128` range.
+
+Within each level, values are stored as an offset from the level's base, ensuring that all values at a shorter encoding are strictly less than all values at a longer encoding.
+
+#### Signed integers
+
+Bit 7 of the first byte is the **sign bit** (1 = non-negative, 0 = negative). The remaining 7 bits begin the same unary-prefix scheme for the magnitude:
+
+- **Non-negative** values encode the magnitude directly after the sign bit.
+- **Negative** values encode `|v| − 1` as the magnitude, then bitwise-complement all bytes (except the sign bit stays 0). This reverses the ordering so that more-negative values produce lexicographically smaller byte sequences.
+
+Small values near zero (both positive and negative) are encoded compactly in 1 byte. For example, values −64 to 63 fit in a single byte.
 
 ### Floats
 

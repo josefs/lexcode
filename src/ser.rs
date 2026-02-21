@@ -1,6 +1,7 @@
 use serde::{ser, Serialize};
 
 use crate::error::{Error, Result};
+use crate::varint;
 
 pub struct Serializer {
     output: Vec<u8>,
@@ -33,56 +34,52 @@ impl<'a> ser::Serializer for &'a mut Serializer {
   }
 
   fn serialize_i8(self, v: i8) -> Result<()> {
-    self.output.push((v as u8).wrapping_add(128));
+    varint::encode_sint(v as i128, &mut self.output);
     Ok(())
   }
 
   fn serialize_i16(self, v: i16) -> Result<()> {
-    let val = (v as u16).wrapping_add(32768);
-    self.output.extend_from_slice(&val.to_be_bytes());
+    varint::encode_sint(v as i128, &mut self.output);
     Ok(())
   }
 
   fn serialize_i32(self, v: i32) -> Result<()> {
-    let val = (v as u32).wrapping_add(2147483648);
-    self.output.extend_from_slice(&val.to_be_bytes());
+    varint::encode_sint(v as i128, &mut self.output);
     Ok(())
   }
 
   fn serialize_i64(self, v: i64) -> Result<()> {
-    let val = (v as u64).wrapping_add(9223372036854775808);
-    self.output.extend_from_slice(&val.to_be_bytes());
+    varint::encode_sint(v as i128, &mut self.output);
     Ok(())
   }
 
   fn serialize_i128(self, v: i128) -> std::result::Result<Self::Ok, Self::Error> {
-    let val = (v as u128).wrapping_add(170141183460469231731687303715884105728);
-    self.output.extend_from_slice(&val.to_be_bytes());
+    varint::encode_sint(v, &mut self.output);
     Ok(())
   }
 
   fn serialize_u8(self, v: u8) -> Result<()> {
-    self.output.push(v);
+    varint::encode_uint(v as u128, &mut self.output);
     Ok(())
   }
 
   fn serialize_u16(self, v: u16) -> Result<()> {
-    self.output.extend_from_slice(&v.to_be_bytes());
+    varint::encode_uint(v as u128, &mut self.output);
     Ok(())
   }
 
   fn serialize_u32(self, v: u32) -> Result<()> {
-    self.output.extend_from_slice(&v.to_be_bytes());
+    varint::encode_uint(v as u128, &mut self.output);
     Ok(())
   }
 
   fn serialize_u64(self, v: u64) -> Result<()> {
-    self.output.extend_from_slice(&v.to_be_bytes());
+    varint::encode_uint(v as u128, &mut self.output);
     Ok(())
   }
 
   fn serialize_u128(self, v: u128) -> std::result::Result<Self::Ok, Self::Error> {
-    self.output.extend_from_slice(&v.to_be_bytes());
+    varint::encode_uint(v, &mut self.output);
     Ok(())
   }
 
@@ -117,8 +114,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
   }
 
   fn serialize_char(self, c: char) -> Result<()> {
-    let bytes = (c as u32).to_be_bytes();
-    self.output.extend_from_slice(&bytes);
+    varint::encode_uint(c as u128, &mut self.output);
     Ok(())
   }
 
