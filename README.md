@@ -152,6 +152,8 @@ Because integers use a variable-length encoding that always promotes to `u128`/`
 
 **Reordering or removing enum variants**: Variants are identified by their positional index, so reordering or removing variants changes the meaning of existing encoded data.
 
+**`[u8; N]` ↔ `&[u8]` / `Vec<u8>`**: Fixed-size byte arrays are serialized as tuples (each element varint-encoded, concatenated without framing), while byte slices use sentinel encoding. These are completely different formats.
+
 ## Limitations
 
 - **`deserialize_any` is not supported.** Since lexcode is a non-self-describing binary format, the deserializer must know the expected type at compile time. This means dynamically-typed values like `serde_json::Value` cannot be deserialized from lexcode.
