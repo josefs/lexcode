@@ -9,11 +9,12 @@ use crate::varint;
 
 pub struct Deserializer<'de> {
   input: &'de [u8],
+  raw_byte_mode: bool,
 }
 
 impl<'de> Deserializer<'de> {
   pub fn from_bytes(input: &'de [u8]) -> Self {
-    Deserializer { input }
+    Deserializer { input, raw_byte_mode: false }
   }
 
   fn read_bytes(&mut self, n: usize) -> Result<&'de [u8]> {
@@ -158,6 +159,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
   where
     V: Visitor<'de>,
   {
+    if self.raw_byte_mode {
+      let b = self.read_u8()?;
+      return visitor.visit_u8(b);
+    }
     let (v, consumed) = varint::decode_uint(self.input)?;
     self.input = &self.input[consumed..];
     let v = u8::try_from(v).map_err(|_| Error::Message("integer overflow: value does not fit in u8".into()))?;
@@ -338,14 +343,24 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
   fn deserialize_tuple_struct<V>(
       self,
-      _name: &'static str,
+      name: &'static str,
       len: usize,
       visitor: V,
   ) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    self.deserialize_tuple(len, visitor)
+    if name == crate::fixed_bytes::FIXED_BYTES_NAME {
+      self.raw_byte_mode = true;
+      let result = visitor.visit_seq(FixedLenAccessor {
+        deserializer: &mut *self,
+        remaining: len,
+      });
+      self.raw_byte_mode = false;
+      result
+    } else {
+      self.deserialize_tuple(len, visitor)
+    }
   }
 
   fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>

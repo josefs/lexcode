@@ -5,13 +5,14 @@ use crate::varint;
 
 pub struct Serializer {
     output: Vec<u8>,
+    raw_byte_mode: bool,
 }
 
 pub fn to_bytes<T>(value: &T) -> Result<Vec<u8>>
 where
     T: Serialize,
 {
-    let mut serializer = Serializer { output: Vec::new() };
+    let mut serializer = Serializer { output: Vec::new(), raw_byte_mode: false };
     value.serialize(&mut serializer)?;
     Ok(serializer.output)
 }
@@ -59,7 +60,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
   }
 
   fn serialize_u8(self, v: u8) -> Result<()> {
-    varint::encode_uint(v as u128, &mut self.output);
+    if self.raw_byte_mode {
+      self.output.push(v);
+    } else {
+      varint::encode_uint(v as u128, &mut self.output);
+    }
     Ok(())
   }
 
@@ -187,9 +192,12 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
   fn serialize_tuple_struct(
       self,
-      _name: &'static str,
+      name: &'static str,
       _len: usize,
   ) -> Result<Self::SerializeTupleStruct> {
+    if name == crate::fixed_bytes::FIXED_BYTES_NAME {
+      self.raw_byte_mode = true;
+    }
     Ok(self)
   }
 
@@ -292,6 +300,7 @@ impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
   }
 
   fn end(self) -> Result<()> {
+    self.raw_byte_mode = false;
     Ok(())
   }
 }

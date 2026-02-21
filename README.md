@@ -57,6 +57,7 @@ assert!(b < c); // category 1 < category 2
 | `char` | Variable-length unsigned varint of code point |
 | `String` / `&str` | Sentinel-escaped with `0x00` terminator |
 | `&[u8]` | Sentinel-escaped with `0x7F` terminator |
+| `FixedBytes<N>` | Raw bytes, exactly N bytes (zero overhead) |
 | `Option<T>` | `0x00` for `None`, `0x01` + value for `Some` |
 | `Vec<T>`, sequences | `0x01` + element per entry, `0x00` terminator |
 | Maps | `0x01` + key + value per entry, `0x00` terminator |
@@ -109,6 +110,23 @@ Variable-length types use sentinel encoding to allow unambiguous termination wit
 ### Sequences and Maps
 
 Variable-length collections prefix each element with `0x01` and end with `0x00`. This preserves element-wise lexicographic comparison.
+
+### Fixed-Size Byte Arrays (`FixedBytes<N>`)
+
+For encoding a known number of bytes without encoding overhead, lexcode provides the type
+`FixedBytes<N>` — the output is exactly N bytes, identical to the input array. This is ideal for hashes, UUIDs, and other fixed-size binary data where space efficiency matters.
+
+Unlike `[u8; N]` (which varint-encodes each byte, averaging ~1.5× the size) or `&[u8]` / `Vec<u8>` (which uses sentinel encoding with a 2-byte terminator), `FixedBytes<N>` has zero overhead.
+
+```rust
+use lexcode::FixedBytes;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Record {
+    id: u64,
+    hash: FixedBytes<32>,   // exactly 32 bytes in output
+}
+```
 
 ## Testing
 

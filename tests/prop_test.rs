@@ -258,4 +258,56 @@ mod prop_tests {
   cross_width_ord_signed_test!(cross_width_ord_i32_i64, i32, i64);
   cross_width_ord_signed_test!(cross_width_ord_i32_i128, i32, i128);
   cross_width_ord_signed_test!(cross_width_ord_i64_i128, i64, i128);
+
+  // FixedBytes tests
+  use lexcode::FixedBytes;
+
+  proptest! {
+      #[test]
+      fn prop_fixed_bytes_32(data in any::<[u8; 32]>()) {
+          let fb = FixedBytes(data);
+          let bytes = lexcode::to_bytes(&fb).unwrap();
+          prop_assert_eq!(bytes.len(), 32, "FixedBytes<32> should encode to exactly 32 bytes");
+          let decoded: FixedBytes<32> = lexcode::from_bytes(&bytes).unwrap();
+          prop_assert_eq!(fb, decoded);
+      }
+
+      #[test]
+      fn prop_ord_fixed_bytes_32(
+          a in any::<[u8; 32]>(),
+          b in any::<[u8; 32]>()
+      ) {
+          let fa = FixedBytes(a);
+          let fb = FixedBytes(b);
+          let bytes_a = lexcode::to_bytes(&fa).unwrap();
+          let bytes_b = lexcode::to_bytes(&fb).unwrap();
+          if fa < fb {
+              prop_assert!(bytes_a < bytes_b);
+          } else if fa > fb {
+              prop_assert!(bytes_a > bytes_b);
+          } else {
+              prop_assert_eq!(bytes_a, bytes_b);
+          }
+      }
+  }
+
+  #[test]
+  fn fixed_bytes_zero_overhead() {
+      let fb = FixedBytes([0xDE, 0xAD, 0xBE, 0xEF]);
+      let bytes = lexcode::to_bytes(&fb).unwrap();
+      assert_eq!(bytes, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+  }
+
+  #[test]
+  fn fixed_bytes_identity_encoding() {
+      // Every byte value 0x00..=0xFF should be stored as-is
+      let mut arr = [0u8; 256];
+      for i in 0..256 {
+          arr[i] = i as u8;
+      }
+      let fb = FixedBytes(arr);
+      let bytes = lexcode::to_bytes(&fb).unwrap();
+      assert_eq!(bytes.len(), 256);
+      assert_eq!(&bytes[..], &arr[..]);
+  }
 }
