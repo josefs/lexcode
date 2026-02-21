@@ -176,6 +176,10 @@ Because integers use a variable-length encoding that always promotes to `u128`/`
 
 - **`deserialize_any` is not supported.** Since lexcode is a non-self-describing binary format, the deserializer must know the expected type at compile time. This means dynamically-typed values like `serde_json::Value` cannot be deserialized from lexcode.
 
+## Comparison with Similar Crates
+
+See [COMPARISON.md](COMPARISON.md) for a detailed comparison with bytekey2, ordcode, memcomparable, and other binary serialization formats.
+
 ## Disclaimer
 
 This library is in no way associated with Lex Fridman. This library cannot conduct a 4-hour podcast interview with your data structures.
