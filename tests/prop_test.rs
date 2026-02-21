@@ -133,4 +133,129 @@ mod prop_tests {
   overflow_test!(overflow_i32_as_i16_neg, i32, i16, -32769i32);
   overflow_test!(overflow_i64_as_i32, i64, i32, i32::MAX as i64 + 1);
   overflow_test!(overflow_i128_as_i64, i128, i64, i64::MAX as i128 + 1);
+
+  // Cross-width encoding equivalence: encoding a value at different integer
+  // widths produces identical bytes.
+  macro_rules! cross_width_unsigned_test {
+      ($name:ident, $small:ty, $large:ty) => {
+          proptest! {
+              #[test]
+              fn $name(val in any::<$small>()) {
+                  let bytes_small = lexcode::to_bytes(&val).unwrap();
+                  let bytes_large = lexcode::to_bytes(&(val as $large)).unwrap();
+                  prop_assert_eq!(bytes_small, bytes_large,
+                      "encoding of {} as {} vs {} differ", val, stringify!($small), stringify!($large));
+              }
+          }
+      };
+  }
+
+  macro_rules! cross_width_signed_test {
+      ($name:ident, $small:ty, $large:ty) => {
+          proptest! {
+              #[test]
+              fn $name(val in any::<$small>()) {
+                  let bytes_small = lexcode::to_bytes(&val).unwrap();
+                  let bytes_large = lexcode::to_bytes(&(val as $large)).unwrap();
+                  prop_assert_eq!(bytes_small, bytes_large,
+                      "encoding of {} as {} vs {} differ", val, stringify!($small), stringify!($large));
+              }
+          }
+      };
+  }
+
+  cross_width_unsigned_test!(cross_width_u8_u16, u8, u16);
+  cross_width_unsigned_test!(cross_width_u8_u32, u8, u32);
+  cross_width_unsigned_test!(cross_width_u8_u64, u8, u64);
+  cross_width_unsigned_test!(cross_width_u8_u128, u8, u128);
+  cross_width_unsigned_test!(cross_width_u16_u32, u16, u32);
+  cross_width_unsigned_test!(cross_width_u16_u64, u16, u64);
+  cross_width_unsigned_test!(cross_width_u16_u128, u16, u128);
+  cross_width_unsigned_test!(cross_width_u32_u64, u32, u64);
+  cross_width_unsigned_test!(cross_width_u32_u128, u32, u128);
+  cross_width_unsigned_test!(cross_width_u64_u128, u64, u128);
+
+  cross_width_signed_test!(cross_width_i8_i16, i8, i16);
+  cross_width_signed_test!(cross_width_i8_i32, i8, i32);
+  cross_width_signed_test!(cross_width_i8_i64, i8, i64);
+  cross_width_signed_test!(cross_width_i8_i128, i8, i128);
+  cross_width_signed_test!(cross_width_i16_i32, i16, i32);
+  cross_width_signed_test!(cross_width_i16_i64, i16, i64);
+  cross_width_signed_test!(cross_width_i16_i128, i16, i128);
+  cross_width_signed_test!(cross_width_i32_i64, i32, i64);
+  cross_width_signed_test!(cross_width_i32_i128, i32, i128);
+  cross_width_signed_test!(cross_width_i64_i128, i64, i128);
+
+  // Cross-width ordering: encoding values at different widths preserves
+  // numerical ordering. E.g. encoding 8u8 and 200u16 should compare the
+  // same way as comparing both values widened to u16.
+  macro_rules! cross_width_ord_unsigned_test {
+      ($name:ident, $small:ty, $large:ty) => {
+          proptest! {
+              #[test]
+              fn $name(a in any::<$small>(), b in any::<$large>()) {
+                  let bytes_a = lexcode::to_bytes(&a).unwrap();
+                  let bytes_b = lexcode::to_bytes(&b).unwrap();
+                  let a_wide = a as $large;
+                  if a_wide < b {
+                      prop_assert!(bytes_a < bytes_b,
+                          "{} as {} < {} as {}, but bytes {:?} >= {:?}",
+                          a, stringify!($small), b, stringify!($large), bytes_a, bytes_b);
+                  } else if a_wide > b {
+                      prop_assert!(bytes_a > bytes_b,
+                          "{} as {} > {} as {}, but bytes {:?} <= {:?}",
+                          a, stringify!($small), b, stringify!($large), bytes_a, bytes_b);
+                  } else {
+                      prop_assert_eq!(bytes_a, bytes_b);
+                  }
+              }
+          }
+      };
+  }
+
+  macro_rules! cross_width_ord_signed_test {
+      ($name:ident, $small:ty, $large:ty) => {
+          proptest! {
+              #[test]
+              fn $name(a in any::<$small>(), b in any::<$large>()) {
+                  let bytes_a = lexcode::to_bytes(&a).unwrap();
+                  let bytes_b = lexcode::to_bytes(&b).unwrap();
+                  let a_wide = a as $large;
+                  if a_wide < b {
+                      prop_assert!(bytes_a < bytes_b,
+                          "{} as {} < {} as {}, but bytes {:?} >= {:?}",
+                          a, stringify!($small), b, stringify!($large), bytes_a, bytes_b);
+                  } else if a_wide > b {
+                      prop_assert!(bytes_a > bytes_b,
+                          "{} as {} > {} as {}, but bytes {:?} <= {:?}",
+                          a, stringify!($small), b, stringify!($large), bytes_a, bytes_b);
+                  } else {
+                      prop_assert_eq!(bytes_a, bytes_b);
+                  }
+              }
+          }
+      };
+  }
+
+  cross_width_ord_unsigned_test!(cross_width_ord_u8_u16, u8, u16);
+  cross_width_ord_unsigned_test!(cross_width_ord_u8_u32, u8, u32);
+  cross_width_ord_unsigned_test!(cross_width_ord_u8_u64, u8, u64);
+  cross_width_ord_unsigned_test!(cross_width_ord_u8_u128, u8, u128);
+  cross_width_ord_unsigned_test!(cross_width_ord_u16_u32, u16, u32);
+  cross_width_ord_unsigned_test!(cross_width_ord_u16_u64, u16, u64);
+  cross_width_ord_unsigned_test!(cross_width_ord_u16_u128, u16, u128);
+  cross_width_ord_unsigned_test!(cross_width_ord_u32_u64, u32, u64);
+  cross_width_ord_unsigned_test!(cross_width_ord_u32_u128, u32, u128);
+  cross_width_ord_unsigned_test!(cross_width_ord_u64_u128, u64, u128);
+
+  cross_width_ord_signed_test!(cross_width_ord_i8_i16, i8, i16);
+  cross_width_ord_signed_test!(cross_width_ord_i8_i32, i8, i32);
+  cross_width_ord_signed_test!(cross_width_ord_i8_i64, i8, i64);
+  cross_width_ord_signed_test!(cross_width_ord_i8_i128, i8, i128);
+  cross_width_ord_signed_test!(cross_width_ord_i16_i32, i16, i32);
+  cross_width_ord_signed_test!(cross_width_ord_i16_i64, i16, i64);
+  cross_width_ord_signed_test!(cross_width_ord_i16_i128, i16, i128);
+  cross_width_ord_signed_test!(cross_width_ord_i32_i64, i32, i64);
+  cross_width_ord_signed_test!(cross_width_ord_i32_i128, i32, i128);
+  cross_width_ord_signed_test!(cross_width_ord_i64_i128, i64, i128);
 }
