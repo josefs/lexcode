@@ -118,6 +118,40 @@ The test suite uses [proptest](https://crates.io/crates/proptest) for property-b
 cargo test
 ```
 
+## Data Migration
+
+Because integers use a variable-length encoding that always promotes to `u128`/`i128` internally, **the same numeric value produces identical bytes regardless of the Rust integer width**. For example, `42u8`, `42u16`, and `42u64` all serialize to the same bytes. This makes several type changes forward- and backward-compatible.
+
+### Compatible changes
+
+**Integer widening** (e.g. `u8` → `u32`, `i16` → `i64`): Always safe. Old data decodes correctly into the wider type since the byte encoding is identical.
+
+**Integer narrowing** (e.g. `u32` → `u16`, `i64` → `i32`): Safe if all stored values fit in the narrower type. Out-of-range values produce an overflow error on deserialization rather than silent truncation.
+
+**`char` ↔ unsigned integers**: `char` uses the same unsigned varint encoding as `u8`–`u128`, so these types are interchangeable. `char` → `u32`/`u64`/`u128` always works. `u32` → `char` works if the value is a valid Unicode code point.
+
+**Newtype struct wrapping/unwrapping**: `struct Wrapper(T)` serializes identically to `T`, so adding or removing a newtype wrapper is always safe.
+
+**Widening a field inside a struct or container**: Since field encodings are width-independent, changing a struct field from `u8` to `u32` (or an element type from `i16` to `i64`, etc.) is safe — old data decodes correctly.
+
+**Appending enum variants**: Adding new variants at the end of an enum is safe for reading old data, since existing variant indices are unchanged.
+
+### Incompatible changes
+
+**Unsigned ↔ signed**: `u8`–`u128` and `i8`–`i128` use structurally different varint schemes (different header formats), so changing signedness silently produces wrong values.
+
+**Float width changes**: `f32` and `f64` use fixed-width encodings (4 and 8 bytes respectively), so they are not interchangeable.
+
+**Integer ↔ float**: Integers use variable-length varint; floats use fixed-width bit-flipped IEEE 754. These are completely different encodings.
+
+**`String` ↔ `&[u8]`**: Strings use sentinel byte `0x00`; byte slices use `0x7F`. Data encoded as one cannot be decoded as the other.
+
+**`T` ↔ `Option<T>`**: `Option` adds a `0x00`/`0x01` prefix byte, so wrapping or unwrapping `Option` changes the encoding.
+
+**Adding or removing struct/tuple fields**: Fields are concatenated without framing, so changing the field count causes subsequent fields to be misaligned.
+
+**Reordering or removing enum variants**: Variants are identified by their positional index, so reordering or removing variants changes the meaning of existing encoded data.
+
 ## Limitations
 
 - **`deserialize_any` is not supported.** Since lexcode is a non-self-describing binary format, the deserializer must know the expected type at compile time. This means dynamically-typed values like `serde_json::Value` cannot be deserialized from lexcode.
